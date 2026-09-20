@@ -162,6 +162,11 @@ class SinkholeVpnService : VpnService() {
         val input = FileInputStream(iface.fileDescriptor)
         val output = FileOutputStream(iface.fileDescriptor)
         val buffer = ByteArray(MAX_PACKET_SIZE)
+        var packetsSeen = 0L
+        var dnsPacketsSeen = 0L
+        var lastStatsLogMillis = 0L
+
+        SinkholeLog.i(TAG, "Tunnel loop starting; waiting for traffic on $VPN_ADDRESS")
 
         try {
             while (isRunning.get() && !Thread.currentThread().isInterrupted) {
@@ -172,7 +177,31 @@ class SinkholeVpnService : VpnService() {
                     break
                 }
                 if (length <= 0) continue
-                if (!isDnsPacket(buffer, length)) continue
+
+                packetsSeen++
+                val isDns = isDnsPacket(buffer, length)
+                if (isDns) dnsPacketsSeen++
+
+                // Heartbeat so we can tell, from logs alone, whether ANY
+                // traffic is reaching the tunnel at all (vs. it arriving but
+                // not being recognized as DNS, vs. nothing arriving).
+                val now = System.currentTimeMillis()
+                if (now - lastStatsLogMillis >= TUNNEL_STATS_LOG_INTERVAL_MS) {
+                    lastStatsLogMillis = now
+                    val version = IpPacketUtils.ipVersion(buffer)
+                    val protocol = if (length >= IpPacketUtils.IPV4_HEADER_LENGTH) {
+                        IpPacketUtils.protocol(buffer)
+                    } else {
+                        -1
+                    }
+                    SinkholeLog.d(
+                        TAG,
+                        "tunnel traffic: seen=$packetsSeen dns=$dnsPacketsSeen " +
+                            "lastPacket(ipVersion=$version protocol=$protocol length=$length)",
+                    )
+                }
+
+                if (!isDns) continue
 
                 val packet = buffer.copyOf(length)
                 try {
@@ -245,6 +274,11 @@ class SinkholeVpnService : VpnService() {
             synchronized(outputLock) {
                 output.write(replyPacket)
             }
+            SinkholeLog.d(
+                TAG,
+                "DNS ${if (blocked) "blocked" else "resolved"}: ${parsed?.queryName ?: "?"} " +
+                    "(type=${parsed?.queryType}, replyBytes=${responsePayload.size})",
+            )
         } catch (e: Exception) {
             SinkholeLog.w(TAG, "Failed handling DNS packet: ${e.message}")
         }
@@ -303,6 +337,7 @@ class SinkholeVpnService : VpnService() {
         private const val WORKER_THREADS = 4
         private const val UPSTREAM_TIMEOUT_MS = 4000
         private const val NOTIFICATION_THROTTLE_MS = 1000L
+        private const val TUNNEL_STATS_LOG_INTERVAL_MS = 3000L
 
         private val UPSTREAM_SERVERS = listOf("1.1.1.1", "8.8.8.8", "9.9.9.9")
 
