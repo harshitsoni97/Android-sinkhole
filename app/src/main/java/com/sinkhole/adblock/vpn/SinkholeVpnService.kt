@@ -7,11 +7,11 @@ import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.service.quicksettings.TileService
-import android.util.Log
 import com.sinkhole.adblock.R
 import com.sinkhole.adblock.blocklist.BlocklistManager
 import com.sinkhole.adblock.data.PrefsManager
 import com.sinkhole.adblock.dns.DnsMessage
+import com.sinkhole.adblock.log.SinkholeLog
 import com.sinkhole.adblock.net.IpPacketUtils
 import com.sinkhole.adblock.notification.NotificationHelper
 import com.sinkhole.adblock.tile.SinkholeTileService
@@ -86,11 +86,11 @@ class SinkholeVpnService : VpnService() {
 
         val iface = establishInterface()
         if (iface == null) {
-            Log.e(TAG, "Failed to establish VPN interface")
+            SinkholeLog.e(TAG, "Failed to establish VPN interface")
             stopSelf()
             return
         }
-        Log.i(TAG, "VPN interface established: dns=$VPN_ADDRESS mtu=$MTU")
+        SinkholeLog.i(TAG, "VPN interface established: dns=$VPN_ADDRESS mtu=$MTU")
         vpnInterface = iface
         isRunning.set(true)
         prefs.protectionEnabled = true
@@ -124,7 +124,7 @@ class SinkholeVpnService : VpnService() {
         try {
             vpnInterface?.close()
         } catch (e: IOException) {
-            Log.w(TAG, "Error closing VPN interface: ${e.message}")
+            SinkholeLog.w(TAG, "Error closing VPN interface: ${e.message}")
         }
         vpnInterface = null
 
@@ -138,7 +138,7 @@ class SinkholeVpnService : VpnService() {
         try {
             TileService.requestListeningState(this, ComponentName(this, SinkholeTileService::class.java))
         } catch (e: Exception) {
-            Log.w(TAG, "Could not refresh QS tile: ${e.message}")
+            SinkholeLog.w(TAG, "Could not refresh QS tile: ${e.message}")
         }
     }
 
@@ -153,7 +153,7 @@ class SinkholeVpnService : VpnService() {
                 .setBlocking(true)
                 .establish()
         } catch (e: Exception) {
-            Log.e(TAG, "establish() failed: ${e.message}")
+            SinkholeLog.e(TAG, "establish() failed: ${e.message}")
             null
         }
     }
@@ -168,7 +168,7 @@ class SinkholeVpnService : VpnService() {
                 val length = try {
                     input.read(buffer)
                 } catch (e: IOException) {
-                    if (isRunning.get()) Log.w(TAG, "tun read failed: ${e.message}")
+                    if (isRunning.get()) SinkholeLog.w(TAG, "tun read failed: ${e.message}")
                     break
                 }
                 if (length <= 0) continue
@@ -188,7 +188,7 @@ class SinkholeVpnService : VpnService() {
             // i.e. total DNS failure until the user manually disables the
             // VPN. Tear protection down cleanly instead so the system falls
             // back to normal DNS.
-            Log.e(TAG, "Tunnel loop crashed unexpectedly, disabling protection: ${t.message}", t)
+            SinkholeLog.e(TAG, "Tunnel loop crashed unexpectedly, disabling protection: ${t.message}", t)
             mainHandler.post { stopVpn() }
         } finally {
             try {
@@ -230,7 +230,7 @@ class SinkholeVpnService : VpnService() {
                 forwardToUpstream(dnsQuery)
             }
             if (responsePayload == null) {
-                Log.w(TAG, "No upstream response for ${parsed?.queryName ?: "unparsed query"}; all resolvers failed")
+                SinkholeLog.w(TAG, "No upstream response for ${parsed?.queryName ?: "unparsed query"}; all resolvers failed")
                 return
             }
 
@@ -246,7 +246,7 @@ class SinkholeVpnService : VpnService() {
                 output.write(replyPacket)
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Failed handling DNS packet: ${e.message}")
+            SinkholeLog.w(TAG, "Failed handling DNS packet: ${e.message}")
         }
     }
 
@@ -256,7 +256,7 @@ class SinkholeVpnService : VpnService() {
             try {
                 socket = DatagramSocket()
                 if (!protect(socket)) {
-                    Log.w(TAG, "protect() failed for upstream socket to $server")
+                    SinkholeLog.w(TAG, "protect() failed for upstream socket to $server")
                 }
                 socket.soTimeout = UPSTREAM_TIMEOUT_MS
                 val address = InetAddress.getByName(server)
@@ -267,7 +267,7 @@ class SinkholeVpnService : VpnService() {
                 socket.receive(responsePacket)
                 return responseBuffer.copyOf(responsePacket.length)
             } catch (e: IOException) {
-                Log.w(TAG, "Forwarding to $server failed: ${e.message}")
+                SinkholeLog.w(TAG, "Forwarding to $server failed: ${e.message}")
                 continue
             } finally {
                 socket?.close()

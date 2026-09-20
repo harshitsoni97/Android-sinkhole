@@ -1,8 +1,8 @@
 package com.sinkhole.adblock.blocklist
 
 import android.content.Context
-import android.util.Log
 import com.sinkhole.adblock.data.PrefsManager
+import com.sinkhole.adblock.log.SinkholeLog
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
@@ -32,7 +32,7 @@ class BlocklistManager(private val context: Context, private val prefs: PrefsMan
         val fromCache = if (cacheFile.exists()) parseHostsStream(cacheFile.inputStream()) else null
         val base = fromCache ?: parseHostsStream(context.assets.open(ASSET_NAME))
         domainsRef.set(base)
-        Log.i(TAG, "Loaded ${base.size} blocklist entries (${if (fromCache != null) "cache" else "bundled asset"})")
+        SinkholeLog.i(TAG, "Loaded ${base.size} blocklist entries (${if (fromCache != null) "cache" else "bundled asset"})")
     }
 
     /** Re-reads the bundled asset, discarding any downloaded list. */
@@ -64,7 +64,7 @@ class BlocklistManager(private val context: Context, private val prefs: PrefsMan
             prefs.lastBlocklistUpdateMillis = System.currentTimeMillis()
             parsed.size
         } catch (e: Exception) {
-            Log.w(TAG, "Blocklist update from $urlString failed: ${e.message}")
+            SinkholeLog.w(TAG, "Blocklist update from $urlString failed: ${e.message}")
             null
         }
     }

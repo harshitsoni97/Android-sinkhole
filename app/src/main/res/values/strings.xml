@@ -25,4 +25,15 @@
     <string name="update_failure">Couldn\'t update blocklist. Check your connection and try again.</string>
     <string name="vpn_permission_denied">VPN permission is required to enable DNS filtering.</string>
     <string name="disclaimer">Runs entirely on this device: DNS queries are filtered locally and only forwarded to your chosen resolver when not blocked. No traffic is sent to any third-party server.</string>
+
+    <string name="action_view_logs">View Logs</string>
+    <string name="log_viewer_title">Logs</string>
+    <string name="action_copy_logs">Copy</string>
+    <string name="action_share_logs">Share</string>
+    <string name="action_clear_logs">Clear</string>
+    <string name="logs_copied">Logs copied to clipboard</string>
+    <string name="logs_empty">No logs yet. Turn protection on and browse a bit, then come back here.</string>
+
+    <string name="private_dns_warning_title">Private DNS may block ad filtering</string>
+    <string name="private_dns_warning_body">Your device\'s Private DNS setting is on. It can prevent this app\'s DNS filtering from working correctly (websites may fail to load with a DNS error). Tap to open network settings and set Private DNS to \"Off\".</string>
 </resources>

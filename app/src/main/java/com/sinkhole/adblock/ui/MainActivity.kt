@@ -1,6 +1,7 @@
 package com.sinkhole.adblock.ui
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.VpnService
@@ -8,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.text.format.DateFormat
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -62,6 +64,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.updateBlocklistButton.setOnClickListener { updateBlocklist() }
+        binding.viewLogsButton.setOnClickListener {
+            startActivity(Intent(this, LogViewerActivity::class.java))
+        }
+        binding.privateDnsWarning.setOnClickListener { openNetworkSettings() }
     }
 
     override fun onResume() {
@@ -163,6 +169,35 @@ class MainActivity : AppCompatActivity() {
         } else {
             val formatted = DateFormat.getMediumDateFormat(this).format(Date(lastUpdate))
             getString(R.string.blocklist_updated_format, formatted)
+        }
+
+        binding.privateDnsWarning.visibility = if (running && isPrivateDnsEnabled()) {
+            android.view.View.VISIBLE
+        } else {
+            android.view.View.GONE
+        }
+    }
+
+    /**
+     * True if system-wide Private DNS (DNS-over-TLS) is on. When it is, the
+     * OS may try to validate/use DoT against whatever DNS server the active
+     * network reports — including our plain-UDP fake resolver — which can
+     * fail and break DNS resolution device-wide (DNS_PROBE_FINISHED_BAD_CONFIG
+     * in Chrome) while this VPN is active. Available since Android 9 (API 28);
+     * treated as off on older versions where the feature doesn't exist.
+     */
+    private fun isPrivateDnsEnabled(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return false
+        val mode = Settings.Global.getString(contentResolver, "private_dns_mode")
+        return mode != null && mode != "off"
+    }
+
+    private fun openNetworkSettings() {
+        val intent = Intent(Settings.ACTION_WIRELESS_SETTINGS)
+        try {
+            startActivity(intent)
+        } catch (e: ActivityNotFoundException) {
+            Toast.makeText(this, R.string.private_dns_warning_title, Toast.LENGTH_SHORT).show()
         }
     }
 

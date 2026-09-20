@@ -28,6 +28,12 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ui.LogViewerActivity"
+            android:exported="false"
+            android:label="@string/log_viewer_title"
+            android:theme="@style/Theme.Sinkhole" />
+
         <service
             android:name=".vpn.SinkholeVpnService"
             android:exported="true"
