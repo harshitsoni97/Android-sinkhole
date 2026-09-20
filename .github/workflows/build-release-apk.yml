@@ -10,6 +10,8 @@ on:
   push:
     tags:
       - "v*"
+    branches:
+      - "claude/dns-sinkhole-ad-blocker-9ojaun"
 
 permissions:
   contents: write
@@ -42,7 +44,7 @@ jobs:
       - name: Determine release tag
         id: vars
         run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           else
             input_tag="${{ github.event.inputs.release_tag }}"
