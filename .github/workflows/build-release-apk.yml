@@ -62,7 +62,7 @@ jobs:
           else
             input_tag="${{ github.event.inputs.release_tag }}"
             if [ -z "$input_tag" ]; then
-              input_tag="v1.0-build${{ github.run_number }}"
+              input_tag="v1.0"
             fi
             echo "tag=$input_tag" >> "$GITHUB_OUTPUT"
           fi
