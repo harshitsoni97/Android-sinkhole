@@ -10,6 +10,7 @@ import android.service.quicksettings.TileService
 import com.sinkhole.adblock.R
 import com.sinkhole.adblock.blocklist.BlocklistManager
 import com.sinkhole.adblock.data.PrefsManager
+import com.sinkhole.adblock.dns.DnsCache
 import com.sinkhole.adblock.dns.DnsMessage
 import com.sinkhole.adblock.log.SinkholeLog
 import com.sinkhole.adblock.net.IpPacketUtils
@@ -40,6 +41,7 @@ class SinkholeVpnService : VpnService() {
 
     private lateinit var prefs: PrefsManager
     private lateinit var blocklistManager: BlocklistManager
+    private val dnsCache = DnsCache()
 
     private var vpnInterface: ParcelFileDescriptor? = null
     private var tunnelThread: Thread? = null
@@ -324,10 +326,25 @@ class SinkholeVpnService : VpnService() {
             if (blocked) blockedCounter.incrementAndGet()
             maybeRefreshState()
 
-            val responsePayload = if (blocked && parsed != null) {
-                DnsMessage.buildBlockedResponse(dnsQuery, parsed)
-            } else {
-                forwardToUpstream(dnsQuery)
+            var fromCache = false
+            val responsePayload = when {
+                blocked && parsed != null -> DnsMessage.buildBlockedResponse(dnsQuery, parsed)
+                parsed != null -> {
+                    val cacheKey = dnsCache.key(parsed.queryName, parsed.queryType)
+                    val cached = dnsCache.get(cacheKey)
+                    if (cached != null) {
+                        fromCache = true
+                        adaptCachedResponse(cached, dnsQuery, parsed)
+                    } else {
+                        val fresh = forwardToUpstream(dnsQuery)
+                        if (fresh != null) {
+                            val ttl = DnsMessage.minAnswerTtlSeconds(fresh, fresh.size)
+                            if (ttl != null) dnsCache.put(cacheKey, fresh, ttl)
+                        }
+                        fresh
+                    }
+                }
+                else -> forwardToUpstream(dnsQuery)
             }
             if (responsePayload == null) {
                 SinkholeLog.w(TAG, "No upstream response for ${parsed?.queryName ?: "unparsed query"}; all resolvers failed")
@@ -355,14 +372,41 @@ class SinkholeVpnService : VpnService() {
             synchronized(outputLock) {
                 output.write(replyPacket)
             }
+            val outcome = when {
+                blocked -> "blocked"
+                fromCache -> "cached"
+                else -> "resolved"
+            }
             SinkholeLog.d(
                 TAG,
-                "DNS ${if (blocked) "blocked" else "resolved"} (v$version): ${parsed?.queryName ?: "?"} " +
+                "DNS $outcome (v$version): ${parsed?.queryName ?: "?"} " +
                     "(type=${parsed?.queryType}, replyBytes=${responsePayload.size})",
             )
         } catch (e: Exception) {
             SinkholeLog.w(TAG, "Failed handling DNS packet: ${e.message}")
         }
+    }
+
+    /**
+     * Reuses a cached upstream response for the live query: copies the
+     * transaction id and echoes back the query's own question section (so
+     * DNS 0x20 case-randomization still matches), leaving the response's
+     * flags/answers intact. The question byte range lines up because the key
+     * guarantees the same qname length + qtype + qclass.
+     */
+    private fun adaptCachedResponse(
+        cached: ByteArray,
+        query: ByteArray,
+        parsed: DnsMessage.ParsedQuery,
+    ): ByteArray {
+        val copy = cached.copyOf()
+        copy[0] = query[0]
+        copy[1] = query[1]
+        val qEnd = parsed.questionEnd
+        if (qEnd in 13..copy.size && qEnd <= query.size) {
+            System.arraycopy(query, 12, copy, 12, qEnd - 12)
+        }
+        return copy
     }
 
     private fun forwardToUpstream(query: ByteArray): ByteArray? {

@@ -109,6 +109,60 @@ object DnsMessage {
         return header + questionSection + answer
     }
 
+    /**
+     * Returns the smallest TTL (seconds) across the answer records of a
+     * response, or null if there are no answers or the message can't be
+     * parsed. Used to decide how long a forwarded answer may be cached;
+     * returning null simply means "don't cache," so parse failures are safe.
+     */
+    fun minAnswerTtlSeconds(data: ByteArray, length: Int): Long? {
+        if (length < HEADER_LENGTH) return null
+        val qdCount = readUShort(data, 4)
+        val anCount = readUShort(data, 6)
+        if (anCount == 0) return null
+
+        var offset = HEADER_LENGTH
+        repeat(qdCount) {
+            offset = skipName(data, offset, length) ?: return null
+            offset += 4 // qtype + qclass
+            if (offset > length) return null
+        }
+
+        var minTtl = Long.MAX_VALUE
+        repeat(anCount) {
+            offset = skipName(data, offset, length) ?: return null
+            // TYPE(2) CLASS(2) TTL(4) RDLENGTH(2)
+            if (offset + 10 > length) return null
+            val ttl = readUInt(data, offset + 4)
+            val rdLength = readUShort(data, offset + 8)
+            offset += 10 + rdLength
+            if (offset > length) return null
+            if (ttl < minTtl) minTtl = ttl
+        }
+        return if (minTtl == Long.MAX_VALUE) null else minTtl
+    }
+
+    /** Advances past a (possibly compressed) DNS name, returning the offset after it. */
+    private fun skipName(data: ByteArray, offset: Int, length: Int): Int? {
+        var i = offset
+        while (i < length) {
+            val b = data[i].toInt() and 0xFF
+            when {
+                b == 0 -> return i + 1
+                b and 0xC0 == 0xC0 -> return if (i + 2 <= length) i + 2 else null // compression pointer ends the name
+                b and 0xC0 != 0 -> return null // reserved label type
+                else -> i += 1 + b
+            }
+        }
+        return null
+    }
+
+    private fun readUInt(data: ByteArray, offset: Int): Long =
+        ((data[offset].toLong() and 0xFF) shl 24) or
+            ((data[offset + 1].toLong() and 0xFF) shl 16) or
+            ((data[offset + 2].toLong() and 0xFF) shl 8) or
+            (data[offset + 3].toLong() and 0xFF)
+
     private fun readUShort(data: ByteArray, offset: Int): Int =
         ((data[offset].toInt() and 0xFF) shl 8) or (data[offset + 1].toInt() and 0xFF)
 

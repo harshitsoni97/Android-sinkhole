@@ -3,10 +3,12 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#00C853"
-        android:pathData="M54,24L34,32v16c0,15.4 10.67,29.8 20,33.3c9.33,-3.5 20,-17.9 20,-33.3V32z" />
+    <!-- Shield (kept within the 66dp adaptive-icon safe zone) -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M48.4,63.4l-9.4,-9.4l4.6,-4.6l4.8,4.8l13.4,-13.4l4.6,4.6z" />
+        android:pathData="M54,26 L78,35 V53 C78,68.5 68,80.5 54,85 C40,80.5 30,68.5 30,53 V35 Z" />
+    <!-- Checkmark cut in the brand green -->
+    <path
+        android:fillColor="#1B5E20"
+        android:pathData="M49,64 L40,55 L43.8,51.2 L49,56.4 L64.2,41.2 L68,45 Z" />
 </vector>
