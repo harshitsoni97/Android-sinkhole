@@ -22,7 +22,9 @@ import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
@@ -46,7 +48,8 @@ class SinkholeVpnService : VpnService() {
 
     private val blockedCounter = AtomicLong(0)
     private val totalCounter = AtomicLong(0)
-    private val lastNotificationUpdateMillis = AtomicLong(0)
+    private val lastStateUpdateMillis = AtomicLong(0)
+    @Volatile private var lastNotifiedBlocked = 0L
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate() {
@@ -100,7 +103,19 @@ class SinkholeVpnService : VpnService() {
             NotificationHelper.buildStatusNotification(this, true, blockedCounter.get()),
         )
 
-        val pool = Executors.newFixedThreadPool(WORKER_THREADS)
+        lastNotifiedBlocked = blockedCounter.get()
+        // Bounded, self-shrinking pool: worker threads exit after a short
+        // idle period (no lingering threads while the phone sits idle), and
+        // the capped queue drops excess under a DNS flood (clients just
+        // retry) rather than letting a backlog balloon memory.
+        val pool = ThreadPoolExecutor(
+            WORKER_THREADS,
+            WORKER_THREADS,
+            THREAD_KEEPALIVE_SECONDS,
+            TimeUnit.SECONDS,
+            LinkedBlockingQueue(MAX_QUEUED_QUERIES),
+            ThreadPoolExecutor.DiscardPolicy(),
+        ).apply { allowCoreThreadTimeOut(true) }
         workerPool = pool
         tunnelThread = Thread({ runTunnelLoop(iface, pool) }, "sinkhole-tunnel").also { it.start() }
         requestTileRefresh()
@@ -113,6 +128,7 @@ class SinkholeVpnService : VpnService() {
         }
 
         persistCounters()
+        SinkholeLog.flush()
         prefs.protectionEnabled = false
 
         tunnelThread?.interrupt()
@@ -196,7 +212,8 @@ class SinkholeVpnService : VpnService() {
                     if (isRunning.get()) SinkholeLog.w(TAG, "tun read failed: ${e.message}")
                     break
                 }
-                if (length <= 0) continue
+                if (length < 0) break // tun fd closed / EOF — stop, don't busy-loop
+                if (length == 0) continue
 
                 packetsSeen++
                 val dnsIpHeaderLen = dnsIpHeaderLength(buffer, length)
@@ -296,7 +313,7 @@ class SinkholeVpnService : VpnService() {
 
             totalCounter.incrementAndGet()
             if (blocked) blockedCounter.incrementAndGet()
-            maybeRefreshNotification()
+            maybeRefreshState()
 
             val responsePayload = if (blocked && parsed != null) {
                 DnsMessage.buildBlockedResponse(dnsQuery, parsed)
@@ -351,7 +368,7 @@ class SinkholeVpnService : VpnService() {
                 val address = InetAddress.getByName(server)
                 socket.send(DatagramPacket(query, query.size, address, DNS_PORT))
 
-                val responseBuffer = ByteArray(MAX_PACKET_SIZE)
+                val responseBuffer = ByteArray(UPSTREAM_RESPONSE_BUFFER)
                 val responsePacket = DatagramPacket(responseBuffer, responseBuffer.size)
                 socket.receive(responsePacket)
                 return responseBuffer.copyOf(responsePacket.length)
@@ -365,12 +382,24 @@ class SinkholeVpnService : VpnService() {
         return null
     }
 
-    private fun maybeRefreshNotification() {
+    /**
+     * Throttled housekeeping run from the DNS workers: persist counters and
+     * flush the log buffer at most once per [STATE_THROTTLE_MS], and repost
+     * the notification only when the blocked count actually changed. This
+     * keeps notification posts and disk writes off the per-query hot path so
+     * heavy browsing doesn't translate into constant wakeups / IO.
+     */
+    private fun maybeRefreshState() {
         val now = System.currentTimeMillis()
-        val prev = lastNotificationUpdateMillis.get()
-        if (now - prev >= NOTIFICATION_THROTTLE_MS && lastNotificationUpdateMillis.compareAndSet(prev, now)) {
-            NotificationHelper.updateNotification(this, true, blockedCounter.get())
+        val prev = lastStateUpdateMillis.get()
+        if (now - prev >= STATE_THROTTLE_MS && lastStateUpdateMillis.compareAndSet(prev, now)) {
             persistCounters()
+            SinkholeLog.flush()
+            val blocked = blockedCounter.get()
+            if (blocked != lastNotifiedBlocked) {
+                lastNotifiedBlocked = blocked
+                NotificationHelper.updateNotification(this, true, blocked)
+            }
         }
     }
 
@@ -392,9 +421,14 @@ class SinkholeVpnService : VpnService() {
         private const val DNS_PORT = 53
         private const val MTU = 1500
         private const val MAX_PACKET_SIZE = 32767
+        // UDP DNS responses are bounded by the client's advertised EDNS0
+        // buffer (typically <= 4096); no need to allocate 32K per query.
+        private const val UPSTREAM_RESPONSE_BUFFER = 4096
         private const val WORKER_THREADS = 4
+        private const val THREAD_KEEPALIVE_SECONDS = 30L
+        private const val MAX_QUEUED_QUERIES = 128
         private const val UPSTREAM_TIMEOUT_MS = 4000
-        private const val NOTIFICATION_THROTTLE_MS = 1000L
+        private const val STATE_THROTTLE_MS = 2000L
         private const val TUNNEL_STATS_LOG_INTERVAL_MS = 3000L
 
         private val UPSTREAM_SERVERS = listOf("1.1.1.1", "8.8.8.8", "9.9.9.9")
