@@ -90,7 +90,7 @@ class SinkholeVpnService : VpnService() {
             stopSelf()
             return
         }
-        SinkholeLog.i(TAG, "VPN interface established: dns=$VPN_ADDRESS,$VPN_ADDRESS_V6 mtu=$MTU")
+        SinkholeLog.i(TAG, "VPN interface established: dns=$DNS_ADDRESS,$DNS_ADDRESS_V6 mtu=$MTU")
         vpnInterface = iface
         isRunning.set(true)
         prefs.protectionEnabled = true
@@ -144,11 +144,18 @@ class SinkholeVpnService : VpnService() {
 
     private fun establishInterface(): ParcelFileDescriptor? {
         return try {
+            // CRITICAL: the DNS server address must be DIFFERENT from the
+            // interface address. A packet destined to an address assigned to
+            // the tun interface itself is treated as local by the kernel and
+            // delivered via loopback — it never egresses the tun for us to
+            // read(). So the interface takes .1 and the (routed but
+            // unassigned) DNS server address is .2; queries the OS sends to
+            // the DNS server are then forwarded out the tun and we see them.
             val builder = Builder()
                 .setSession(getString(R.string.app_name))
                 .addAddress(VPN_ADDRESS, 32)
-                .addDnsServer(VPN_ADDRESS)
-                .addRoute(VPN_ADDRESS, 32)
+                .addDnsServer(DNS_ADDRESS)
+                .addRoute(DNS_ADDRESS, 32)
                 .setMtu(MTU)
                 .setBlocking(true)
 
@@ -158,8 +165,8 @@ class SinkholeVpnService : VpnService() {
             // rather than losing the VPN entirely.
             try {
                 builder.addAddress(VPN_ADDRESS_V6, 128)
-                builder.addDnsServer(VPN_ADDRESS_V6)
-                builder.addRoute(VPN_ADDRESS_V6, 128)
+                builder.addDnsServer(DNS_ADDRESS_V6)
+                builder.addRoute(DNS_ADDRESS_V6, 128)
             } catch (e: Exception) {
                 SinkholeLog.w(TAG, "IPv6 tunnel setup failed, continuing IPv4-only: ${e.message}")
             }
@@ -179,7 +186,7 @@ class SinkholeVpnService : VpnService() {
         var dnsPacketsSeen = 0L
         var lastStatsLogMillis = 0L
 
-        SinkholeLog.i(TAG, "Tunnel loop starting; waiting for traffic on $VPN_ADDRESS / $VPN_ADDRESS_V6")
+        SinkholeLog.i(TAG, "Tunnel loop starting; waiting for DNS on $DNS_ADDRESS / $DNS_ADDRESS_V6")
 
         try {
             while (isRunning.get() && !Thread.currentThread().isInterrupted) {
@@ -203,10 +210,12 @@ class SinkholeVpnService : VpnService() {
                 if (now - lastStatsLogMillis >= TUNNEL_STATS_LOG_INTERVAL_MS) {
                     lastStatsLogMillis = now
                     val version = IpPacketUtils.ipVersion(buffer)
-                    val protocol = if (length >= IpPacketUtils.IPV4_HEADER_LENGTH) {
-                        IpPacketUtils.protocol(buffer)
-                    } else {
-                        -1
+                    val protocol = when {
+                        version == 6 && length >= IpPacketUtils.IPV6_HEADER_LENGTH ->
+                            IpPacketUtils.ipv6NextHeader(buffer)
+                        version == 4 && length >= IpPacketUtils.IPV4_HEADER_LENGTH ->
+                            IpPacketUtils.protocol(buffer)
+                        else -> -1
                     }
                     SinkholeLog.d(
                         TAG,
@@ -377,7 +386,9 @@ class SinkholeVpnService : VpnService() {
         const val ACTION_STOP = "com.sinkhole.adblock.action.STOP"
 
         private const val VPN_ADDRESS = "10.111.222.1"
+        private const val DNS_ADDRESS = "10.111.222.2"
         private const val VPN_ADDRESS_V6 = "fdaa:1:1::1"
+        private const val DNS_ADDRESS_V6 = "fdaa:1:1::2"
         private const val DNS_PORT = 53
         private const val MTU = 1500
         private const val MAX_PACKET_SIZE = 32767
