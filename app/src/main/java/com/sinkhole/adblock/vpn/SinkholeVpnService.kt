@@ -1,8 +1,12 @@
 package com.sinkhole.adblock.vpn
 
+import android.content.ComponentName
 import android.content.Intent
 import android.net.VpnService
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.service.quicksettings.TileService
 import android.util.Log
 import com.sinkhole.adblock.R
 import com.sinkhole.adblock.blocklist.BlocklistManager
@@ -10,6 +14,7 @@ import com.sinkhole.adblock.data.PrefsManager
 import com.sinkhole.adblock.dns.DnsMessage
 import com.sinkhole.adblock.net.IpPacketUtils
 import com.sinkhole.adblock.notification.NotificationHelper
+import com.sinkhole.adblock.tile.SinkholeTileService
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
@@ -42,6 +47,7 @@ class SinkholeVpnService : VpnService() {
     private val blockedCounter = AtomicLong(0)
     private val totalCounter = AtomicLong(0)
     private val lastNotificationUpdateMillis = AtomicLong(0)
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate() {
         super.onCreate()
@@ -84,6 +90,7 @@ class SinkholeVpnService : VpnService() {
             stopSelf()
             return
         }
+        Log.i(TAG, "VPN interface established: dns=$VPN_ADDRESS mtu=$MTU")
         vpnInterface = iface
         isRunning.set(true)
         prefs.protectionEnabled = true
@@ -96,6 +103,7 @@ class SinkholeVpnService : VpnService() {
         val pool = Executors.newFixedThreadPool(WORKER_THREADS)
         workerPool = pool
         tunnelThread = Thread({ runTunnelLoop(iface, pool) }, "sinkhole-tunnel").also { it.start() }
+        requestTileRefresh()
     }
 
     private fun stopVpn() {
@@ -122,7 +130,16 @@ class SinkholeVpnService : VpnService() {
 
         stopForeground(STOP_FOREGROUND_DETACH)
         NotificationHelper.updateNotification(this, false, blockedCounter.get())
+        requestTileRefresh()
         stopSelf()
+    }
+
+    private fun requestTileRefresh() {
+        try {
+            TileService.requestListeningState(this, ComponentName(this, SinkholeTileService::class.java))
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not refresh QS tile: ${e.message}")
+        }
     }
 
     private fun establishInterface(): ParcelFileDescriptor? {
@@ -164,6 +181,15 @@ class SinkholeVpnService : VpnService() {
                     // Pool is shutting down; drop the packet.
                 }
             }
+        } catch (t: Throwable) {
+            // Anything escaping here would otherwise kill this background
+            // thread (and, on Android, the whole process) silently, leaving
+            // the OS pointed at a DNS server nobody is servicing anymore —
+            // i.e. total DNS failure until the user manually disables the
+            // VPN. Tear protection down cleanly instead so the system falls
+            // back to normal DNS.
+            Log.e(TAG, "Tunnel loop crashed unexpectedly, disabling protection: ${t.message}", t)
+            mainHandler.post { stopVpn() }
         } finally {
             try {
                 input.close()
@@ -202,7 +228,11 @@ class SinkholeVpnService : VpnService() {
                 DnsMessage.buildBlockedResponse(dnsQuery, parsed)
             } else {
                 forwardToUpstream(dnsQuery)
-            } ?: return
+            }
+            if (responsePayload == null) {
+                Log.w(TAG, "No upstream response for ${parsed?.queryName ?: "unparsed query"}; all resolvers failed")
+                return
+            }
 
             val replyPacket = IpPacketUtils.buildIpv4UdpPacket(
                 srcIp = dstIp,
@@ -225,7 +255,9 @@ class SinkholeVpnService : VpnService() {
             var socket: DatagramSocket? = null
             try {
                 socket = DatagramSocket()
-                protect(socket)
+                if (!protect(socket)) {
+                    Log.w(TAG, "protect() failed for upstream socket to $server")
+                }
                 socket.soTimeout = UPSTREAM_TIMEOUT_MS
                 val address = InetAddress.getByName(server)
                 socket.send(DatagramPacket(query, query.size, address, DNS_PORT))
@@ -235,6 +267,7 @@ class SinkholeVpnService : VpnService() {
                 socket.receive(responsePacket)
                 return responseBuffer.copyOf(responsePacket.length)
             } catch (e: IOException) {
+                Log.w(TAG, "Forwarding to $server failed: ${e.message}")
                 continue
             } finally {
                 socket?.close()
