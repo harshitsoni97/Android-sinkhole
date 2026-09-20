@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="sinkhole_primary">#1B5E20</color>
+    <color name="sinkhole_primary_dark">#0D3B12</color>
+    <color name="sinkhole_accent">#00C853</color>
+    <color name="sinkhole_off">#B71C1C</color>
+    <color name="background_light">#F5F7F5</color>
+    <color name="text_primary">#1A1C19</color>
+    <color name="text_secondary">#5B6058</color>
+    <color name="white">#FFFFFF</color>
+</resources>
