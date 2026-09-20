@@ -4,16 +4,19 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Minimal, allocation-light helpers for reading/writing raw IPv4 + UDP headers
- * on packets read from / written to the VpnService TUN file descriptor.
+ * Minimal, allocation-light helpers for reading/writing raw IPv4/IPv6 + UDP
+ * headers on packets read from / written to the VpnService TUN file
+ * descriptor.
  *
- * We only ever see IPv4/UDP/port-53 traffic here (the VPN is configured to
- * route just the fake DNS server address through the tunnel), so this does
- * not attempt to be a general-purpose IP stack.
+ * We only ever see UDP/port-53 traffic here (the VPN is configured to route
+ * just the fake DNS server addresses through the tunnel), so this does not
+ * attempt to be a general-purpose IP stack — notably, IPv6 extension headers
+ * are not handled, since OS-generated DNS queries never include them.
  */
 object IpPacketUtils {
 
     const val IPV4_HEADER_LENGTH = 20
+    const val IPV6_HEADER_LENGTH = 40
     const val UDP_HEADER_LENGTH = 8
     const val PROTOCOL_UDP = 17
 
@@ -25,6 +28,12 @@ object IpPacketUtils {
 
     fun sourceAddress(packet: ByteArray): ByteArray = packet.copyOfRange(12, 16)
     fun destAddress(packet: ByteArray): ByteArray = packet.copyOfRange(16, 20)
+
+    /** IPv6 "Next Header" field — analogous to [protocol] for IPv4. */
+    fun ipv6NextHeader(packet: ByteArray): Int = packet[6].toInt() and 0xFF
+
+    fun ipv6SourceAddress(packet: ByteArray): ByteArray = packet.copyOfRange(8, 24)
+    fun ipv6DestAddress(packet: ByteArray): ByteArray = packet.copyOfRange(24, 40)
 
     fun udpSourcePort(packet: ByteArray, ipHeaderLen: Int): Int {
         val off = ipHeaderLen
@@ -114,7 +123,7 @@ object IpPacketUtils {
         bytes[11] = (ipChecksum and 0xFF).toByte()
 
         // Fill in the UDP checksum (pseudo-header + UDP segment).
-        val udpChecksum = udpChecksum(srcIp, dstIp, bytes, IPV4_HEADER_LENGTH, udpLength)
+        val udpChecksum = ipv4UdpChecksum(srcIp, dstIp, bytes, IPV4_HEADER_LENGTH, udpLength)
         val udpChecksumOffset = IPV4_HEADER_LENGTH + 6
         bytes[udpChecksumOffset] = ((udpChecksum shr 8) and 0xFF).toByte()
         bytes[udpChecksumOffset + 1] = (udpChecksum and 0xFF).toByte()
@@ -122,7 +131,7 @@ object IpPacketUtils {
         return bytes
     }
 
-    private fun udpChecksum(
+    private fun ipv4UdpChecksum(
         srcIp: ByteArray,
         dstIp: ByteArray,
         packet: ByteArray,
@@ -140,6 +149,74 @@ object IpPacketUtils {
         val totalSum = onesComplementSum(packet, udpOffset, udpLength, pseudoSum)
         val checksum = checksumFromSum(totalSum)
         // RFC 768: a computed checksum of 0 is transmitted as all-ones.
+        return if (checksum == 0) 0xFFFF else checksum
+    }
+
+    /**
+     * Builds a full IPv6+UDP reply packet: [srcIp:srcPort] -> [dstIp:dstPort]
+     * carrying [payload]. srcIp/dstIp must be 16-byte addresses. Unlike IPv4,
+     * the UDP checksum is mandatory for IPv6 (RFC 8200) and is always
+     * computed here.
+     */
+    fun buildIpv6UdpPacket(
+        srcIp: ByteArray,
+        srcPort: Int,
+        dstIp: ByteArray,
+        dstPort: Int,
+        payload: ByteArray,
+    ): ByteArray {
+        val udpLength = UDP_HEADER_LENGTH + payload.size
+        val totalLength = IPV6_HEADER_LENGTH + udpLength
+        val buffer = ByteBuffer.allocate(totalLength).order(ByteOrder.BIG_ENDIAN)
+
+        // --- IPv6 fixed header (40 bytes, no extension headers) ---
+        buffer.putInt(0x60000000) // version 6, traffic class 0, flow label 0
+        buffer.putShort(udpLength.toShort()) // payload length (everything after this header)
+        buffer.put(PROTOCOL_UDP.toByte()) // next header
+        buffer.put(64.toByte()) // hop limit
+        buffer.put(srcIp)
+        buffer.put(dstIp)
+
+        // --- UDP header ---
+        buffer.putShort(srcPort.toShort())
+        buffer.putShort(dstPort.toShort())
+        buffer.putShort(udpLength.toShort())
+        buffer.putShort(0.toShort()) // checksum placeholder
+        buffer.put(payload)
+
+        val bytes = buffer.array()
+
+        val udpChecksum = ipv6UdpChecksum(srcIp, dstIp, bytes, IPV6_HEADER_LENGTH, udpLength)
+        val checksumOffset = IPV6_HEADER_LENGTH + 6
+        bytes[checksumOffset] = ((udpChecksum shr 8) and 0xFF).toByte()
+        bytes[checksumOffset + 1] = (udpChecksum and 0xFF).toByte()
+
+        return bytes
+    }
+
+    private fun ipv6UdpChecksum(
+        srcIp: ByteArray,
+        dstIp: ByteArray,
+        packet: ByteArray,
+        udpOffset: Int,
+        udpLength: Int,
+    ): Int {
+        // Pseudo-header per RFC 8200 8.1: src(16) + dst(16) + upper-layer
+        // length(4) + zero(3) + next header(1) = 40 bytes.
+        val pseudoHeader = ByteBuffer.allocate(40).order(ByteOrder.BIG_ENDIAN)
+        pseudoHeader.put(srcIp)
+        pseudoHeader.put(dstIp)
+        pseudoHeader.putInt(udpLength)
+        pseudoHeader.put(0.toByte())
+        pseudoHeader.put(0.toByte())
+        pseudoHeader.put(0.toByte())
+        pseudoHeader.put(PROTOCOL_UDP.toByte())
+
+        val pseudoSum = onesComplementSum(pseudoHeader.array(), 0, 40)
+        val totalSum = onesComplementSum(packet, udpOffset, udpLength, pseudoSum)
+        val checksum = checksumFromSum(totalSum)
+        // RFC 8200: unlike IPv4, an IPv6 UDP checksum must never be
+        // transmitted as zero (which would mean "no checksum").
         return if (checksum == 0) 0xFFFF else checksum
     }
 }

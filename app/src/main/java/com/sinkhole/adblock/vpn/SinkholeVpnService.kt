@@ -90,7 +90,7 @@ class SinkholeVpnService : VpnService() {
             stopSelf()
             return
         }
-        SinkholeLog.i(TAG, "VPN interface established: dns=$VPN_ADDRESS mtu=$MTU")
+        SinkholeLog.i(TAG, "VPN interface established: dns=$VPN_ADDRESS,$VPN_ADDRESS_V6 mtu=$MTU")
         vpnInterface = iface
         isRunning.set(true)
         prefs.protectionEnabled = true
@@ -144,14 +144,27 @@ class SinkholeVpnService : VpnService() {
 
     private fun establishInterface(): ParcelFileDescriptor? {
         return try {
-            Builder()
+            val builder = Builder()
                 .setSession(getString(R.string.app_name))
                 .addAddress(VPN_ADDRESS, 32)
                 .addDnsServer(VPN_ADDRESS)
                 .addRoute(VPN_ADDRESS, 32)
                 .setMtu(MTU)
                 .setBlocking(true)
-                .establish()
+
+            // Best-effort: many networks are dual-stack and hand out DNS
+            // over IPv6, which an IPv4-only fake resolver would never see.
+            // If IPv6 setup fails for some reason, fall back to IPv4-only
+            // rather than losing the VPN entirely.
+            try {
+                builder.addAddress(VPN_ADDRESS_V6, 128)
+                builder.addDnsServer(VPN_ADDRESS_V6)
+                builder.addRoute(VPN_ADDRESS_V6, 128)
+            } catch (e: Exception) {
+                SinkholeLog.w(TAG, "IPv6 tunnel setup failed, continuing IPv4-only: ${e.message}")
+            }
+
+            builder.establish()
         } catch (e: Exception) {
             SinkholeLog.e(TAG, "establish() failed: ${e.message}")
             null
@@ -166,7 +179,7 @@ class SinkholeVpnService : VpnService() {
         var dnsPacketsSeen = 0L
         var lastStatsLogMillis = 0L
 
-        SinkholeLog.i(TAG, "Tunnel loop starting; waiting for traffic on $VPN_ADDRESS")
+        SinkholeLog.i(TAG, "Tunnel loop starting; waiting for traffic on $VPN_ADDRESS / $VPN_ADDRESS_V6")
 
         try {
             while (isRunning.get() && !Thread.currentThread().isInterrupted) {
@@ -179,7 +192,8 @@ class SinkholeVpnService : VpnService() {
                 if (length <= 0) continue
 
                 packetsSeen++
-                val isDns = isDnsPacket(buffer, length)
+                val dnsIpHeaderLen = dnsIpHeaderLength(buffer, length)
+                val isDns = dnsIpHeaderLen >= 0
                 if (isDns) dnsPacketsSeen++
 
                 // Heartbeat so we can tell, from logs alone, whether ANY
@@ -227,22 +241,44 @@ class SinkholeVpnService : VpnService() {
         }
     }
 
-    private fun isDnsPacket(packet: ByteArray, length: Int): Boolean {
-        if (length < IpPacketUtils.IPV4_HEADER_LENGTH) return false
-        if (IpPacketUtils.ipVersion(packet) != 4) return false
-        val ipHeaderLen = IpPacketUtils.ipHeaderLength(packet)
-        if (ipHeaderLen < IpPacketUtils.IPV4_HEADER_LENGTH || ipHeaderLen + IpPacketUtils.UDP_HEADER_LENGTH > length) {
-            return false
+    /**
+     * Returns the IP header length if [packet] is an IPv4 or IPv6 UDP/53
+     * query we should handle, or -1 otherwise.
+     */
+    private fun dnsIpHeaderLength(packet: ByteArray, length: Int): Int {
+        return when (IpPacketUtils.ipVersion(packet)) {
+            4 -> {
+                if (length < IpPacketUtils.IPV4_HEADER_LENGTH) return -1
+                val ipHeaderLen = IpPacketUtils.ipHeaderLength(packet)
+                if (ipHeaderLen < IpPacketUtils.IPV4_HEADER_LENGTH ||
+                    ipHeaderLen + IpPacketUtils.UDP_HEADER_LENGTH > length
+                ) {
+                    return -1
+                }
+                if (IpPacketUtils.protocol(packet) != IpPacketUtils.PROTOCOL_UDP) return -1
+                if (IpPacketUtils.udpDestPort(packet, ipHeaderLen) != DNS_PORT) return -1
+                ipHeaderLen
+            }
+            6 -> {
+                if (length < IpPacketUtils.IPV6_HEADER_LENGTH + IpPacketUtils.UDP_HEADER_LENGTH) return -1
+                if (IpPacketUtils.ipv6NextHeader(packet) != IpPacketUtils.PROTOCOL_UDP) return -1
+                if (IpPacketUtils.udpDestPort(packet, IpPacketUtils.IPV6_HEADER_LENGTH) != DNS_PORT) return -1
+                IpPacketUtils.IPV6_HEADER_LENGTH
+            }
+            else -> -1
         }
-        if (IpPacketUtils.protocol(packet) != IpPacketUtils.PROTOCOL_UDP) return false
-        return IpPacketUtils.udpDestPort(packet, ipHeaderLen) == DNS_PORT
     }
 
     private fun handleDnsPacket(packet: ByteArray, output: FileOutputStream) {
         try {
-            val ipHeaderLen = IpPacketUtils.ipHeaderLength(packet)
-            val srcIp = IpPacketUtils.sourceAddress(packet)
-            val dstIp = IpPacketUtils.destAddress(packet)
+            val version = IpPacketUtils.ipVersion(packet)
+            val ipHeaderLen = if (version == 4) {
+                IpPacketUtils.ipHeaderLength(packet)
+            } else {
+                IpPacketUtils.IPV6_HEADER_LENGTH
+            }
+            val srcIp = if (version == 4) IpPacketUtils.sourceAddress(packet) else IpPacketUtils.ipv6SourceAddress(packet)
+            val dstIp = if (version == 4) IpPacketUtils.destAddress(packet) else IpPacketUtils.ipv6DestAddress(packet)
             val srcPort = IpPacketUtils.udpSourcePort(packet, ipHeaderLen)
             val dnsQuery = IpPacketUtils.udpPayload(packet, packet.size, ipHeaderLen)
 
@@ -263,20 +299,30 @@ class SinkholeVpnService : VpnService() {
                 return
             }
 
-            val replyPacket = IpPacketUtils.buildIpv4UdpPacket(
-                srcIp = dstIp,
-                srcPort = DNS_PORT,
-                dstIp = srcIp,
-                dstPort = srcPort,
-                payload = responsePayload,
-            )
+            val replyPacket = if (version == 4) {
+                IpPacketUtils.buildIpv4UdpPacket(
+                    srcIp = dstIp,
+                    srcPort = DNS_PORT,
+                    dstIp = srcIp,
+                    dstPort = srcPort,
+                    payload = responsePayload,
+                )
+            } else {
+                IpPacketUtils.buildIpv6UdpPacket(
+                    srcIp = dstIp,
+                    srcPort = DNS_PORT,
+                    dstIp = srcIp,
+                    dstPort = srcPort,
+                    payload = responsePayload,
+                )
+            }
 
             synchronized(outputLock) {
                 output.write(replyPacket)
             }
             SinkholeLog.d(
                 TAG,
-                "DNS ${if (blocked) "blocked" else "resolved"}: ${parsed?.queryName ?: "?"} " +
+                "DNS ${if (blocked) "blocked" else "resolved"} (v$version): ${parsed?.queryName ?: "?"} " +
                     "(type=${parsed?.queryType}, replyBytes=${responsePayload.size})",
             )
         } catch (e: Exception) {
@@ -331,6 +377,7 @@ class SinkholeVpnService : VpnService() {
         const val ACTION_STOP = "com.sinkhole.adblock.action.STOP"
 
         private const val VPN_ADDRESS = "10.111.222.1"
+        private const val VPN_ADDRESS_V6 = "fdaa:1:1::1"
         private const val DNS_PORT = 53
         private const val MTU = 1500
         private const val MAX_PACKET_SIZE = 32767
