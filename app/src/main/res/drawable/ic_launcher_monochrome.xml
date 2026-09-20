@@ -1,0 +1,15 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!--
+      Themed-icon (Android 13+) layer. Uses evenOdd so the checkmark is a
+      hole in the shield; the system tints the remaining shape to match the
+      user's wallpaper/theme.
+    -->
+    <path
+        android:fillColor="#000000"
+        android:fillType="evenOdd"
+        android:pathData="M54,26 L78,35 V53 C78,68.5 68,80.5 54,85 C40,80.5 30,68.5 30,53 V35 Z M49,64 L40,55 L43.8,51.2 L49,56.4 L64.2,41.2 L68,45 Z" />
+</vector>

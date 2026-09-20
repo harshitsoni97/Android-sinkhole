@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Shield (kept within the 66dp adaptive-icon safe zone) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,26 L78,35 V53 C78,68.5 68,80.5 54,85 C40,80.5 30,68.5 30,53 V35 Z" />
+    <!-- Checkmark cut in the brand green -->
+    <path
+        android:fillColor="#1B5E20"
+        android:pathData="M49,64 L40,55 L43.8,51.2 L49,56.4 L64.2,41.2 L68,45 Z" />
+</vector>

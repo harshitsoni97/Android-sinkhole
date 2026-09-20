@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DNS Sinkhole</string>
+
+    <string name="notification_channel_name">Protection status</string>
+    <string name="notification_channel_name_minimal">Protection status (minimal)</string>
+    <string name="notification_channel_description">Shows whether ad/tracker blocking is currently active</string>
+    <string name="notification_title_active">DNS Sinkhole is active</string>
+    <string name="notification_title_inactive">DNS Sinkhole is off</string>
+    <string name="notification_text_blocked_count">%1$d ad/tracker queries blocked</string>
+    <string name="notification_text_inactive">Tap to open, or use the button to turn protection back on</string>
+    <string name="notification_action_turn_off">Turn Off</string>
+    <string name="notification_action_turn_on">Turn On</string>
+
+    <string name="status_active">Protection is ON</string>
+    <string name="status_inactive">Protection is OFF</string>
+    <string name="status_subtitle_active">Blocking ads and trackers at the DNS level</string>
+    <string name="status_subtitle_inactive">Turn on to start blocking ads and trackers</string>
+    <string name="stats_format">%1$,d blocked out of %2$,d DNS queries</string>
+    <string name="blocklist_format">%1$,d domains in blocklist</string>
+    <string name="blocklist_updated_format">Last updated: %1$s</string>
+    <string name="blocklist_never_updated">Using bundled starter list</string>
+    <string name="action_update_blocklist">Update Blocklist Now</string>
+    <string name="update_in_progress">Updating blocklist…</string>
+    <string name="update_success_format">Blocklist updated: %1$,d domains</string>
+    <string name="update_failure">Couldn\'t update blocklist. Check your connection and try again.</string>
+    <string name="vpn_permission_denied">VPN permission is required to enable DNS filtering.</string>
+    <string name="disclaimer">Runs entirely on this device: DNS queries are filtered locally and only forwarded to your chosen resolver when not blocked. No traffic is sent to any third-party server.</string>
+
+    <string name="action_view_logs">View Logs</string>
+    <string name="log_viewer_title">Logs</string>
+    <string name="action_copy_logs">Copy</string>
+    <string name="action_share_logs">Share</string>
+    <string name="action_clear_logs">Clear</string>
+    <string name="logs_copied">Logs copied to clipboard</string>
+    <string name="logs_empty">No logs yet. Turn protection on and browse a bit, then come back here.</string>
+
+    <string name="private_dns_warning_title">Private DNS may block ad filtering</string>
+    <string name="private_dns_warning_body">Your device\'s Private DNS setting is on. It can prevent this app\'s DNS filtering from working correctly (websites may fail to load with a DNS error). Tap to open network settings and set Private DNS to \"Off\".</string>
+
+    <string name="minimal_notification_title">Minimal notification</string>
+    <string name="minimal_notification_summary">Hide the status notification from the status bar and make it silent. Android still requires a small ongoing notification while the VPN runs.</string>
+    <string name="stats_blocked_label">Queries blocked</string>
+    <string name="stats_total_label">%1$,d DNS queries seen</string>
+    <string name="section_statistics">Statistics</string>
+    <string name="section_blocklist">Blocklist</string>
+    <string name="section_settings">Settings</string>
+</resources>

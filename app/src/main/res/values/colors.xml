@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Material 3 green tonal palette (static fallback; dynamic color wins on Android 12+). -->
+    <color name="md_primary">#326941</color>
+    <color name="md_on_primary">#FFFFFF</color>
+    <color name="md_primary_container">#B4F1BE</color>
+    <color name="md_on_primary_container">#00210E</color>
+    <color name="md_secondary">#506353</color>
+    <color name="md_on_secondary">#FFFFFF</color>
+    <color name="md_secondary_container">#D3E8D3</color>
+    <color name="md_on_secondary_container">#0E1F13</color>
+
+    <!-- Semantic status colors for the shield (intentionally NOT dynamic). -->
+    <color name="sinkhole_accent">#2E7D32</color>
+    <color name="sinkhole_off">#B3261E</color>
+
+    <!-- Warning banner (Private DNS). -->
+    <color name="warning_container">#FFF3CD</color>
+    <color name="warning_on_container">#7A5B00</color>
+</resources>

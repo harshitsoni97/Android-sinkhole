@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      Material 3 (Material You) theme. On Android 12+ the palette is replaced
+      at runtime by the user's wallpaper colors via DynamicColors (applied in
+      SinkholeApplication); the green tones below are the static fallback for
+      older devices.
+    -->
+    <style name="Theme.Sinkhole" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/md_primary</item>
+        <item name="colorOnPrimary">@color/md_on_primary</item>
+        <item name="colorPrimaryContainer">@color/md_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/md_on_primary_container</item>
+        <item name="colorSecondary">@color/md_secondary</item>
+        <item name="colorOnSecondary">@color/md_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/md_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/md_on_secondary_container</item>
+        <item name="android:statusBarColor" tools:targetApi="21">@android:color/transparent</item>
+    </style>
+</resources>

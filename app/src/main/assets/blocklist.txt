@@ -1,0 +1,158 @@
+# DNS Sinkhole - bundled starter blocklist
+#
+# One domain per line (hosts-file style "0.0.0.0 domain" is also accepted,
+# so this file can later be replaced wholesale by a downloaded list such as
+# https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts).
+#
+# This curated starting set covers major ad, analytics and tracking
+# infrastructure. Blocking a domain here also blocks all of its subdomains
+# (see BlocklistManager#matchesAnySuffix), so entries are kept at the
+# shortest domain that safely covers the ad/tracking service.
+
+# --- Google / DoubleClick advertising & measurement ---
+doubleclick.net
+googleadservices.com
+googlesyndication.com
+googletagservices.com
+googletagmanager.com
+google-analytics.com
+googleoptimize.com
+admob.com
+adsense.com
+adservice.google.com
+pagead2.googlesyndication.com
+pubads.g.doubleclick.net
+
+# --- Facebook / Meta ---
+ads.facebook.com
+an.facebook.com
+connect.facebook.net
+pixel.facebook.com
+
+# --- Amazon advertising ---
+amazon-adsystem.com
+assoc-amazon.com
+
+# --- Microsoft advertising & telemetry ---
+ads.msn.com
+advertising.microsoft.com
+telemetry.microsoft.com
+vortex.data.microsoft.com
+watson.telemetry.microsoft.com
+
+# --- Analytics / tracking / attribution ---
+scorecardresearch.com
+quantserve.com
+quantcast.com
+mixpanel.com
+segment.io
+segment.com
+amplitude.com
+hotjar.com
+crazyegg.com
+fullstory.com
+mouseflow.com
+newrelic.com
+nr-data.net
+bugsnag.com
+sentry.io
+adjust.com
+appsflyer.com
+branch.io
+kochava.com
+tune.com
+flurry.com
+localytics.com
+mopub.com
+chartboost.com
+supersonicads.com
+ironsrc.com
+unityads.unity3d.com
+vungle.com
+applovin.com
+inmobi.com
+smaato.com
+pubmatic.com
+rubiconproject.com
+openx.net
+adroll.com
+criteo.com
+criteo.net
+taboola.com
+outbrain.com
+revcontent.com
+mgid.com
+yieldmo.com
+adnxs.com
+adform.net
+adcolony.com
+media.net
+bidswitch.net
+casalemedia.com
+contextweb.com
+districtm.io
+smartadserver.com
+teads.tv
+tremorhub.com
+spotxchange.com
+trafficjunky.net
+exoclick.com
+juicyads.com
+propellerads.com
+popads.net
+adcash.com
+zedo.com
+
+# --- Generic ad/tracker subdomain patterns seen across many sites ---
+ads.yahoo.com
+ads.linkedin.com
+ads.twitter.com
+ads.pinterest.com
+ads.reddit.com
+adservice.google.co.uk
+analytics.twitter.com
+analytics.yahoo.com
+adserver.yahoo.com
+track.adform.net
+tracking.klaviyo.com
+click.linksynergy.com
+sync.mathtag.com
+pixel.mathtag.com
+bs.serving-sys.com
+ad.doubleclick.net
+static.doubleclick.net
+stats.wp.com
+pixel.wp.com
+metrics.apple.com
+analytics.samsung.com
+data.flurry.com
+
+# --- Mobile app SDK trackers / analytics ---
+app-measurement.com
+crashlytics.com
+onesignal.com
+braze.com
+leanplum.com
+urbanairship.com
+apptentive.com
+singular.net
+adtrace.co
+
+# --- Misc known ad/tracker infrastructure ---
+2mdn.net
+3lift.com
+adition.com
+adsrvr.org
+bttrack.com
+demdex.net
+demdex.com
+everesttech.net
+gemius.pl
+moatads.com
+serving-sys.com
+sharethrough.com
+simpli.fi
+turn.com
+w55c.net
+yieldlab.net
+zqtk.net
