@@ -3,6 +3,7 @@
     <string name="app_name">DNS Sinkhole</string>
 
     <string name="notification_channel_name">Protection status</string>
+    <string name="notification_channel_name_minimal">Protection status (minimal)</string>
     <string name="notification_channel_description">Shows whether ad/tracker blocking is currently active</string>
     <string name="notification_title_active">DNS Sinkhole is active</string>
     <string name="notification_title_inactive">DNS Sinkhole is off</string>
@@ -36,4 +37,12 @@
 
     <string name="private_dns_warning_title">Private DNS may block ad filtering</string>
     <string name="private_dns_warning_body">Your device\'s Private DNS setting is on. It can prevent this app\'s DNS filtering from working correctly (websites may fail to load with a DNS error). Tap to open network settings and set Private DNS to \"Off\".</string>
+
+    <string name="minimal_notification_title">Minimal notification</string>
+    <string name="minimal_notification_summary">Hide the status notification from the status bar and make it silent. Android still requires a small ongoing notification while the VPN runs.</string>
+    <string name="stats_blocked_label">Queries blocked</string>
+    <string name="stats_total_label">%1$,d DNS queries seen</string>
+    <string name="section_statistics">Statistics</string>
+    <string name="section_blocklist">Blocklist</string>
+    <string name="section_settings">Settings</string>
 </resources>

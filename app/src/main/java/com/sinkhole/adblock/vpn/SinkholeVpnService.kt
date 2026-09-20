@@ -67,6 +67,15 @@ class SinkholeVpnService : VpnService() {
                 stopVpn()
                 return START_NOT_STICKY
             }
+            ACTION_REFRESH_NOTIFICATION -> {
+                if (isRunning.get()) {
+                    startForeground(
+                        NotificationHelper.NOTIFICATION_ID,
+                        NotificationHelper.buildStatusNotification(this, true, blockedCounter.get()),
+                    )
+                }
+                return START_STICKY
+            }
             else -> {
                 startVpn()
                 return START_STICKY
@@ -413,6 +422,7 @@ class SinkholeVpnService : VpnService() {
 
         const val ACTION_START = "com.sinkhole.adblock.action.START"
         const val ACTION_STOP = "com.sinkhole.adblock.action.STOP"
+        const val ACTION_REFRESH_NOTIFICATION = "com.sinkhole.adblock.action.REFRESH_NOTIFICATION"
 
         private const val VPN_ADDRESS = "10.111.222.1"
         private const val DNS_ADDRESS = "10.111.222.2"

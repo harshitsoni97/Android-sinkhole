@@ -68,6 +68,17 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, LogViewerActivity::class.java))
         }
         binding.privateDnsWarning.setOnClickListener { openNetworkSettings() }
+
+        binding.minimalNotificationSwitch.isChecked = prefs.minimalNotification
+        binding.minimalNotificationSwitch.setOnCheckedChangeListener { _, isChecked ->
+            prefs.minimalNotification = isChecked
+            if (SinkholeVpnService.isRunning.get()) {
+                startService(
+                    Intent(this, SinkholeVpnService::class.java)
+                        .setAction(SinkholeVpnService.ACTION_REFRESH_NOTIFICATION)
+                )
+            }
+        }
     }
 
     override fun onResume() {

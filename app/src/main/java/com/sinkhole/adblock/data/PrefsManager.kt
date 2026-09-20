@@ -37,6 +37,16 @@ class PrefsManager(context: Context) {
         get() = prefs.getLong(KEY_LAST_UPDATE, 0L)
         set(value) = prefs.edit().putLong(KEY_LAST_UPDATE, value).apply()
 
+    /**
+     * When true, the persistent status notification uses a silent, MIN
+     * importance channel (no status-bar icon, no action button). Android
+     * requires *some* notification for a foreground VPN service, so this
+     * minimizes it rather than removing it.
+     */
+    var minimalNotification: Boolean
+        get() = prefs.getBoolean(KEY_MINIMAL_NOTIFICATION, false)
+        set(value) = prefs.edit().putBoolean(KEY_MINIMAL_NOTIFICATION, value).apply()
+
     fun incrementCounters(blocked: Boolean) {
         totalQueryCount += 1
         if (blocked) blockedQueryCount += 1
@@ -51,6 +61,7 @@ class PrefsManager(context: Context) {
         private const val KEY_CUSTOM_BLOCKED = "custom_blocked_domains"
         private const val KEY_WHITELIST = "whitelisted_domains"
         private const val KEY_LAST_UPDATE = "last_blocklist_update"
+        private const val KEY_MINIMAL_NOTIFICATION = "minimal_notification"
 
         const val DEFAULT_BLOCKLIST_URL =
             "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"

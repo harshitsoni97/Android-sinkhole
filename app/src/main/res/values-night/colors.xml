@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="background_light">#12140F</color>
-    <color name="text_primary">#E8EAE4</color>
-    <color name="text_secondary">#B7BCB3</color>
+    <!-- Dark-mode Material 3 green tonal palette (static fallback). -->
+    <color name="md_primary">#98D89A</color>
+    <color name="md_on_primary">#003917</color>
+    <color name="md_primary_container">#164325</color>
+    <color name="md_on_primary_container">#B4F1BE</color>
+    <color name="md_secondary">#B7CCB8</color>
+    <color name="md_on_secondary">#223526</color>
+    <color name="md_secondary_container">#384B3C</color>
+    <color name="md_on_secondary_container">#D3E8D3</color>
+
+    <color name="sinkhole_accent">#7FDA88</color>
+    <color name="sinkhole_off">#FFB4AB</color>
+
+    <color name="warning_container">#4A3F00</color>
+    <color name="warning_on_container">#FDE49A</color>
 </resources>
