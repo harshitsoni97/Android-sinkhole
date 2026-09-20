@@ -1,0 +1,72 @@
+name: Build and Release APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to publish (leave blank to auto-generate)"
+        required: false
+        default: ""
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install required SDK packages
+        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Determine release tag
+        id: vars
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            input_tag="${{ github.event.inputs.release_tag }}"
+            if [ -z "$input_tag" ]; then
+              input_tag="v1.0-build${{ github.run_number }}"
+            fi
+            echo "tag=$input_tag" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Rename APK for release
+        run: |
+          mkdir -p release-out
+          cp app/build/outputs/apk/debug/app-debug.apk "release-out/dns-sinkhole-${{ steps.vars.outputs.tag }}.apk"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.vars.outputs.tag }}
+          name: DNS Sinkhole ${{ steps.vars.outputs.tag }}
+          body: |
+            Debug-signed APK, built automatically from commit ${{ github.sha }}.
+
+            Install: download the APK to your Android device (or `adb install`)
+            and open it. You'll need to allow "install from unknown sources"
+            for whichever app you use to open the file, since this isn't
+            distributed via the Play Store.
+          files: release-out/*.apk
